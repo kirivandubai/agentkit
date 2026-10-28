@@ -125,13 +125,15 @@ def unlink_regular(dir_fd: int, name: str) -> None:
 
 @contextlib.contextmanager
 def atomic_writer(path: str | os.PathLike[str], *, dir_fd: int | None = None, mode: int = 0o644,
-                  replace: bool = True, fsync: bool = True) -> Iterator[IO[bytes]]:
+                  replace: bool = True, fsync: bool = True, over_links: bool = False) -> Iterator[IO[bytes]]:
     """A file written beside its target under a random name and moved over it only when the block ends without an
     error: a reader never sees half a file, a crash leaves no half file under the name.
 
     dir_fd: the folder (path is then a bare name), as os functions take it; without one the target's own folder is
-    opened. A name there that is not a regular file is refused (NotRegular) rather than replaced. replace=False: the
-    file is published with link(), which refuses an existing name — a link included — with FileExistsError."""
+    opened. A name there that is not a regular file is refused (NotRegular) rather than replaced; over_links=True
+    renames over a link instead (never following it), for a folder where someone else may plant one and the writer's
+    file must win. replace=False: the file is published with link(), which refuses an existing name — a link
+    included — with FileExistsError."""
     name = os.fspath(path)
     if dir_fd is None:
         folder = os.open(os.path.dirname(name) or ".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
@@ -143,7 +145,8 @@ def atomic_writer(path: str | os.PathLike[str], *, dir_fd: int | None = None, mo
     temporary = f".{name}.{secrets.token_hex(6)}.tmp"
     try:
         with contextlib.suppress(FileNotFoundError):
-            if not stat.S_ISREG(os.stat(name, dir_fd=folder, follow_symlinks=False).st_mode):
+            there = os.stat(name, dir_fd=folder, follow_symlinks=False).st_mode
+            if not (stat.S_ISREG(there) or (over_links and stat.S_ISLNK(there))):
                 raise NotRegular(name)
         fd = open_leaf(folder, temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
@@ -168,7 +171,7 @@ def atomic_writer(path: str | os.PathLike[str], *, dir_fd: int | None = None, mo
 
 
 def write_atomic(path: str | os.PathLike[str], data: bytes, *, dir_fd: int | None = None,
-                 mode: int = 0o644, replace: bool = True, fsync: bool = True) -> None:
+                 mode: int = 0o644, replace: bool = True, fsync: bool = True, over_links: bool = False) -> None:
     """data as the file at path, whole or not at all (atomic_writer)."""
-    with atomic_writer(path, dir_fd=dir_fd, mode=mode, replace=replace, fsync=fsync) as file:
+    with atomic_writer(path, dir_fd=dir_fd, mode=mode, replace=replace, fsync=fsync, over_links=over_links) as file:
         file.write(data)

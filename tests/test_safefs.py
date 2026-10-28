@@ -179,6 +179,15 @@ def test_write_atomic_never_replaces_what_is_no_regular_file(root, tmp_path):
     assert (tmp_path / "outside" / "f.txt").read_text() == "secret"
 
 
+def test_over_links_renames_over_a_link_and_never_follows_it(root, tmp_path):
+    (root / "link").symlink_to(tmp_path / "outside" / "f.txt")
+    safefs.write_atomic(root / "link", b"mine", over_links=True)
+    assert not (root / "link").is_symlink() and (root / "link").read_bytes() == b"mine"
+    assert (tmp_path / "outside" / "f.txt").read_text() == "secret"
+    with pytest.raises(safefs.NotRegular):  # a folder is still no file to replace
+        safefs.write_atomic(root / "a", b"x", over_links=True)
+
+
 def test_write_atomic_without_replace_refuses_an_existing_name(root):
     safefs.write_atomic(root / "once", b"first", replace=False)
     with pytest.raises(FileExistsError):
