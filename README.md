@@ -27,9 +27,9 @@ dependencies = ["agentkit"]            # или "agentkit[mcp]" для tool-се
 agentkit = { git = "https://github.com/kirivandubai/agentkit", tag = "v0.1.0" }
 ```
 
-Репозиторий приватный: на хосте git берёт ключ через `gh auth git-credential` (`~/.gitconfig`). Сборка Docker-образа
-получает его build-секретом `github_token` (compose: `secrets: github_token: environment: GITHUB_TOKEN`; install.sh
-ставит `GITHUB_TOKEN` из `gh auth token`), токен не попадает ни в слой, ни в кэш.
+Репозиторий публичный (владелец, 2026-10-28): `uv sync` и сборке Docker-образа нужен только доступ к github.com —
+ни токена, ни build-секрета. Где github.com недоступен при сборке (образ коробки dev), библиотека лежит копией в
+`vendor/` по тегу.
 
 Новая версия — новый тег `vX.Y.Z` и `uv lock` в каждом зависящем репозитории; копии в `vendor/` обновляются байт в
 байт (их тест хеша иначе падает).
